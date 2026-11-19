@@ -1,0 +1,176 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidSearchHistory(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.sourceText is string && data.sourceText.size() >= 1 && data.sourceText.size() <= 300 &&
+             data.translatedText is string && data.translatedText.size() >= 1 && data.translatedText.size() <= 600 &&
+             data.reading is string && data.reading.size() <= 200 &&
+             data.sourceLang is string && data.sourceLang.size() >= 2 && data.sourceLang.size() <= 15 &&
+             data.targetLang is string && data.targetLang.size() >= 2 && data.targetLang.size() <= 15 &&
+             data.wordCount is int && data.wordCount >= 1 && data.wordCount <= 50 &&
+             data.hasTranslation is bool &&
+             data.partOfSpeech is string && data.partOfSpeech.size() <= 60 &&
+             data.contextNote is string && data.contextNote.size() <= 500 &&
+             data.mangaId is string && data.mangaId.size() <= 128 &&
+             data.mangaTitle is string && data.mangaTitle.size() <= 200 &&
+             data.chapterLabel is string && data.chapterLabel.size() <= 60 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidSavedTranslation(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.sourceText is string && data.sourceText.size() >= 1 && data.sourceText.size() <= 300 &&
+             data.translatedText is string && data.translatedText.size() >= 1 && data.translatedText.size() <= 600 &&
+             data.reading is string && data.reading.size() <= 200 &&
+             data.sourceLang is string && data.sourceLang.size() >= 2 && data.sourceLang.size() <= 15 &&
+             data.targetLang is string && data.targetLang.size() >= 2 && data.targetLang.size() <= 15 &&
+             data.wordCount is int && data.wordCount >= 1 && data.wordCount <= 50 &&
+             data.hasTranslation is bool &&
+             data.partOfSpeech is string && data.partOfSpeech.size() <= 60 &&
+             data.contextNote is string && data.contextNote.size() <= 500 &&
+             data.mangaId is string && data.mangaId.size() <= 128 &&
+             data.mangaTitle is string && data.mangaTitle.size() <= 200 &&
+             data.chapterLabel is string && data.chapterLabel.size() <= 60 &&
+             data.userNote is string && data.userNote.size() <= 300 &&
+             data.mastered is bool &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidFavoriteManga(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.mangaId is string && data.mangaId.size() >= 1 && data.mangaId.size() <= 128 &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 200 &&
+             data.coverUrl is string && data.coverUrl.size() <= 500 &&
+             data.preferredLang is string && data.preferredLang.size() >= 2 && data.preferredLang.size() <= 15 &&
+             data.lastChapterId is string && data.lastChapterId.size() <= 128 &&
+             data.lastChapterTitle is string && data.lastChapterTitle.size() <= 120 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    match /users/{userId} {
+      match /search_history/{historyId} {
+        allow list: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(historyId);
+        allow create: if isOwner(userId) &&
+                         isValidId(historyId) &&
+                         incoming().keys().hasAll([
+                           'userId', 'sourceText', 'translatedText', 'reading',
+                           'sourceLang', 'targetLang', 'wordCount', 'hasTranslation',
+                           'partOfSpeech', 'contextNote', 'mangaId', 'mangaTitle',
+                           'chapterLabel', 'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'sourceText', 'translatedText', 'reading',
+                           'sourceLang', 'targetLang', 'wordCount', 'hasTranslation',
+                           'partOfSpeech', 'contextNote', 'mangaId', 'mangaTitle',
+                           'chapterLabel', 'createdAt', 'updatedAt'
+                         ]) &&
+                         isValidSearchHistory(incoming(), userId);
+        allow update: if isOwner(userId) &&
+                         isValidId(historyId) &&
+                         isValidSearchHistory(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().sourceText == existing().sourceText &&
+                         incoming().sourceLang == existing().sourceLang &&
+                         incoming().targetLang == existing().targetLang &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'translatedText', 'reading', 'wordCount', 'hasTranslation',
+                           'partOfSpeech', 'contextNote', 'mangaId', 'mangaTitle',
+                           'chapterLabel', 'updatedAt'
+                         ]);
+        allow delete: if isOwner(userId) && isValidId(historyId);
+      }
+
+      match /saved_translations/{savedId} {
+        allow list: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(savedId);
+        allow create: if isOwner(userId) &&
+                         isValidId(savedId) &&
+                         incoming().keys().hasAll([
+                           'userId', 'sourceText', 'translatedText', 'reading',
+                           'sourceLang', 'targetLang', 'wordCount', 'hasTranslation',
+                           'partOfSpeech', 'contextNote', 'mangaId', 'mangaTitle',
+                           'chapterLabel', 'userNote', 'mastered', 'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'sourceText', 'translatedText', 'reading',
+                           'sourceLang', 'targetLang', 'wordCount', 'hasTranslation',
+                           'partOfSpeech', 'contextNote', 'mangaId', 'mangaTitle',
+                           'chapterLabel', 'userNote', 'mastered', 'createdAt', 'updatedAt'
+                         ]) &&
+                         isValidSavedTranslation(incoming(), userId);
+        allow update: if isOwner(userId) &&
+                         isValidId(savedId) &&
+                         isValidSavedTranslation(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().sourceText == existing().sourceText &&
+                         incoming().translatedText == existing().translatedText &&
+                         incoming().sourceLang == existing().sourceLang &&
+                         incoming().targetLang == existing().targetLang &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'userNote', 'mastered', 'updatedAt'
+                         ]);
+        allow delete: if isOwner(userId) && isValidId(savedId);
+      }
+
+      match /favorite_mangas/{mangaId} {
+        allow list: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(mangaId);
+        allow create: if isOwner(userId) &&
+                         isValidId(mangaId) &&
+                         incoming().keys().hasAll([
+                           'userId', 'mangaId', 'title', 'coverUrl', 'preferredLang',
+                           'lastChapterId', 'lastChapterTitle', 'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'mangaId', 'title', 'coverUrl', 'preferredLang',
+                           'lastChapterId', 'lastChapterTitle', 'createdAt', 'updatedAt'
+                         ]) &&
+                         isValidFavoriteManga(incoming(), userId);
+        allow update: if isOwner(userId) &&
+                         isValidId(mangaId) &&
+                         isValidFavoriteManga(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().mangaId == existing().mangaId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'title', 'coverUrl', 'preferredLang',
+                           'lastChapterId', 'lastChapterTitle', 'updatedAt'
+                         ]);
+        allow delete: if isOwner(userId) && isValidId(mangaId);
+      }
+    }
+  }
+}

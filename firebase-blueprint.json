@@ -1,0 +1,127 @@
+{
+  "entities": {
+    "SearchHistoryItem": {
+      "title": "SearchHistoryItem",
+      "description": "A single word or multi-word phrase lookup performed inside the manga reader and saved to the user's vocabulary history.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Authenticated user UID" },
+        "sourceText": { "type": "string", "description": "Original word or multi-word phrase" },
+        "translatedText": { "type": "string", "description": "Translated text in target language" },
+        "reading": { "type": "string", "description": "Phonetic reading, romaji, or furigana" },
+        "sourceLang": { "type": "string", "description": "Source language code (e.g. ja, en, es)" },
+        "targetLang": { "type": "string", "description": "Target language code (e.g. es, en, fr)" },
+        "wordCount": { "type": "integer", "description": "Number of selected words/tokens (1 or more)" },
+        "hasTranslation": { "type": "boolean", "description": "Whether the selected word(s) form a valid translatable unit" },
+        "partOfSpeech": { "type": "string", "description": "Grammatical category or expression type" },
+        "contextNote": { "type": "string", "description": "Nuance or manga dialogue context note" },
+        "mangaId": { "type": "string", "description": "Manga identifier where the lookup occurred" },
+        "mangaTitle": { "type": "string", "description": "Manga title" },
+        "chapterLabel": { "type": "string", "description": "Chapter number or label" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update" }
+      },
+      "required": [
+        "userId",
+        "sourceText",
+        "translatedText",
+        "reading",
+        "sourceLang",
+        "targetLang",
+        "wordCount",
+        "hasTranslation",
+        "partOfSpeech",
+        "contextNote",
+        "mangaId",
+        "mangaTitle",
+        "chapterLabel",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "SavedTranslation": {
+      "title": "SavedTranslation",
+      "description": "A user-bookmarked word or phrase translation for study and quick reference.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Authenticated user UID" },
+        "sourceText": { "type": "string", "description": "Original word or multi-word phrase" },
+        "translatedText": { "type": "string", "description": "Translated text in target language" },
+        "reading": { "type": "string", "description": "Phonetic reading, romaji, or furigana" },
+        "sourceLang": { "type": "string", "description": "Source language code" },
+        "targetLang": { "type": "string", "description": "Target language code" },
+        "wordCount": { "type": "integer", "description": "Number of selected words/tokens" },
+        "hasTranslation": { "type": "boolean", "description": "Whether the selected word(s) form a valid translatable unit" },
+        "partOfSpeech": { "type": "string", "description": "Grammatical category" },
+        "contextNote": { "type": "string", "description": "Nuance or manga dialogue context note" },
+        "mangaId": { "type": "string", "description": "Manga identifier" },
+        "mangaTitle": { "type": "string", "description": "Manga title" },
+        "chapterLabel": { "type": "string", "description": "Chapter label" },
+        "userNote": { "type": "string", "description": "Personal study note added by the user" },
+        "mastered": { "type": "boolean", "description": "Whether the user marked this entry as mastered" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update" }
+      },
+      "required": [
+        "userId",
+        "sourceText",
+        "translatedText",
+        "reading",
+        "sourceLang",
+        "targetLang",
+        "wordCount",
+        "hasTranslation",
+        "partOfSpeech",
+        "contextNote",
+        "mangaId",
+        "mangaTitle",
+        "chapterLabel",
+        "userNote",
+        "mastered",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "FavoriteManga": {
+      "title": "FavoriteManga",
+      "description": "A bookmarked manga in the user's personal library with last read chapter and preferred language.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Authenticated user UID" },
+        "mangaId": { "type": "string", "description": "Manga ID" },
+        "title": { "type": "string", "description": "Manga display title" },
+        "coverUrl": { "type": "string", "description": "Cover artwork URL" },
+        "preferredLang": { "type": "string", "description": "Preferred reading language code" },
+        "lastChapterId": { "type": "string", "description": "Last read chapter ID" },
+        "lastChapterTitle": { "type": "string", "description": "Last read chapter label" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update" }
+      },
+      "required": [
+        "userId",
+        "mangaId",
+        "title",
+        "coverUrl",
+        "preferredLang",
+        "lastChapterId",
+        "lastChapterTitle",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/search_history/{historyId}": {
+      "schema": { "$ref": "#/entities/SearchHistoryItem" },
+      "description": "Chronological history of words and phrases translated by the user."
+    },
+    "/users/{userId}/saved_translations/{savedId}": {
+      "schema": { "$ref": "#/entities/SavedTranslation" },
+      "description": "User's bookmarked word and phrase translations."
+    },
+    "/users/{userId}/favorite_mangas/{mangaId}": {
+      "schema": { "$ref": "#/entities/FavoriteManga" },
+      "description": "User's saved manga library and reading progress."
+    }
+  }
+}
