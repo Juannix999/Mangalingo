@@ -21,9 +21,6 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Prepare debug keystore and environment file
         run: |
           if [ ! -f debug.keystore ] && [ -f debug.keystore.base64 ]; then
