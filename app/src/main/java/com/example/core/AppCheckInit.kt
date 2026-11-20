@@ -16,6 +16,7 @@ private const val DEBUG_STORE_PREFIX = "com.google.firebase.appcheck.debug.store
 private const val DEBUG_SECRET_KEY = "com.google.firebase.appcheck.debug.DEBUG_SECRET"
 private const val HARNESS_PREFS_NAME = "app_check_harness_prefs"
 private const val KEY_HARNESS_TOKEN_PRESENT = "has_harness_debug_token"
+private const val KEY_FORCE_DEBUG_PROVIDER = "force_manual_debug_provider"
 private const val RECAPTCHA_SITE_KEY_RES = "recaptcha_site_key"
 
 @Volatile
@@ -50,6 +51,7 @@ fun configureAppCheck(context: Context, intent: Intent?) {
                     .commit()
                 harnessPrefs.edit()
                     .putBoolean(KEY_HARNESS_TOKEN_PRESENT, true)
+                    .putBoolean(KEY_FORCE_DEBUG_PROVIDER, false)
                     .commit()
                 FirebaseAppCheck.getInstance().installAppCheckProviderFactory(
                     DebugAppCheckProviderFactory.getInstance()
@@ -67,6 +69,16 @@ fun configureAppCheck(context: Context, intent: Intent?) {
                 activeAppCheckProviderLabel = "Debug Provider (persistido)"
                 appCheckConfigured = true
                 Log.d(TAG, "DebugAppCheckProviderFactory installed from persisted harness flag.")
+                return
+            }
+
+            if (harnessPrefs.getBoolean(KEY_FORCE_DEBUG_PROVIDER, false)) {
+                FirebaseAppCheck.getInstance().installAppCheckProviderFactory(
+                    DebugAppCheckProviderFactory.getInstance()
+                )
+                activeAppCheckProviderLabel = "Debug Token manual"
+                appCheckConfigured = true
+                Log.d(TAG, "DebugAppCheckProviderFactory installed from manual debug token preference.")
                 return
             }
 
@@ -94,6 +106,45 @@ fun configureAppCheck(context: Context, intent: Intent?) {
         activeAppCheckProviderLabel = "Error al iniciar App Check: ${e.localizedMessage}"
         Log.e(TAG, "Failed to initialize Firebase App Check", e)
     }
+}
+
+fun switchToDebugTokenProvider(context: Context): String {
+    if (FirebaseApp.getApps(context).isEmpty()) {
+        FirebaseApp.initializeApp(context)
+    }
+    val persistenceKey = FirebaseApp.getInstance().persistenceKey
+    val prefs = context.getSharedPreferences(
+        "$DEBUG_STORE_PREFIX$persistenceKey",
+        Context.MODE_PRIVATE
+    )
+    var token = prefs.getString(DEBUG_SECRET_KEY, null)
+    if (token.isNullOrBlank()) {
+        token = java.util.UUID.randomUUID().toString()
+        prefs.edit().putString(DEBUG_SECRET_KEY, token).commit()
+    }
+    context.getSharedPreferences(HARNESS_PREFS_NAME, Context.MODE_PRIVATE)
+        .edit()
+        .putBoolean(KEY_FORCE_DEBUG_PROVIDER, true)
+        .commit()
+    FirebaseAppCheck.getInstance().installAppCheckProviderFactory(
+        DebugAppCheckProviderFactory.getInstance()
+    )
+    activeAppCheckProviderLabel = "Debug Token manual"
+    appCheckConfigured = true
+    return token
+}
+
+fun switchToRecaptchaProvider(context: Context): Boolean {
+    context.getSharedPreferences(HARNESS_PREFS_NAME, Context.MODE_PRIVATE)
+        .edit()
+        .putBoolean(KEY_FORCE_DEBUG_PROVIDER, false)
+        .commit()
+    val ok = installRecaptchaProvider(context)
+    if (ok) {
+        activeAppCheckProviderLabel = "reCAPTCHA Enterprise"
+        appCheckConfigured = true
+    }
+    return ok
 }
 
 private fun installRecaptchaProvider(context: Context): Boolean {

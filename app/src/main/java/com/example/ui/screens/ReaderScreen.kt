@@ -48,6 +48,7 @@ import androidx.compose.material.icons.rounded.DocumentScanner
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Translate
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -64,6 +65,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -89,11 +91,14 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
@@ -106,6 +111,7 @@ import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import com.example.R
 import com.example.core.SupportedLanguage
+import com.example.core.switchToDebugTokenProvider
 import com.example.data.model.DetectedBubble
 import com.example.data.model.InteractiveMangaPanel
 import com.example.ui.components.LanguagePairPill
@@ -127,6 +133,10 @@ fun ReaderScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val loadedBitmaps = remember { mutableStateMapOf<Int, Bitmap>() }
     var showTargetLangMenu by remember { mutableStateOf(false) }
+    var debugTokenDialogUuid by remember { mutableStateOf<String?>(null) }
+    var copiedTokenNotice by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
 
     LaunchedEffect(state.feedbackMessage) {
         val msg = state.feedbackMessage
@@ -488,6 +498,8 @@ fun ReaderScreen(
             }
 
             if (state.scanError != null) {
+                val errText = state.scanError.orEmpty()
+                val isAppCheckError = errText.contains("App Check", ignoreCase = true) || errText.contains("403")
                 Surface(
                     color = MaterialTheme.colorScheme.errorContainer,
                     shape = MaterialTheme.shapes.medium,
@@ -495,29 +507,110 @@ fun ReaderScreen(
                         .align(Alignment.TopCenter)
                         .padding(12.dp)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp)
+                    Column(
+                        modifier = Modifier.padding(start = 12.dp, end = 6.dp, top = 6.dp, bottom = 6.dp)
                     ) {
-                        Text(
-                            text = state.scanError.orEmpty(),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                            modifier = Modifier.weight(1f, fill = false)
-                        )
-                        IconButton(
-                            onClick = viewModel::dismissScanError,
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Close,
-                                contentDescription = "Cerrar aviso",
-                                tint = MaterialTheme.colorScheme.onErrorContainer,
-                                modifier = Modifier.size(16.dp)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = errText,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.weight(1f, fill = false)
                             )
+                            IconButton(
+                                onClick = viewModel::dismissScanError,
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Close,
+                                    contentDescription = "Cerrar aviso",
+                                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                        if (isAppCheckError) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.padding(top = 4.dp)
+                            ) {
+                                TextButton(
+                                    onClick = {
+                                        copiedTokenNotice = false
+                                        debugTokenDialogUuid = switchToDebugTokenProvider(context)
+                                    }
+                                ) {
+                                    Text(
+                                        text = "Token Debug",
+                                        color = MaterialTheme.colorScheme.onErrorContainer,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                TextButton(
+                                    onClick = {
+                                        viewModel.dismissScanError()
+                                        loadedBitmaps[state.currentPageIndex]?.let { bmp ->
+                                            viewModel.scanPageBitmap(state.currentPageIndex, bmp)
+                                        }
+                                    }
+                                ) {
+                                    Text(
+                                        text = "Reintentar",
+                                        color = MaterialTheme.colorScheme.onErrorContainer
+                                    )
+                                }
+                            }
                         }
                     }
                 }
+            }
+
+            val tokenUuid = debugTokenDialogUuid
+            if (tokenUuid != null) {
+                AlertDialog(
+                    onDismissRequest = { debugTokenDialogUuid = null },
+                    title = { Text("Token Debug de App Check") },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                text = "Si Firebase rechaza reCAPTCHA en tu teléfono, copia este token y agrégalo en Firebase Console → App Check → Apps → MangaLingo → Administrar tokens de depuración:",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            Surface(
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                shape = MaterialTheme.shapes.small
+                            ) {
+                                Text(
+                                    text = tokenUuid,
+                                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                                    modifier = Modifier.padding(10.dp)
+                                )
+                            }
+                            if (copiedTokenNotice) {
+                                Text(
+                                    text = "Token copiado al portapapeles.",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                clipboardManager.setText(AnnotatedString(tokenUuid))
+                                copiedTokenNotice = true
+                            }
+                        ) {
+                            Text("Copiar token")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { debugTokenDialogUuid = null }) {
+                            Text("Cerrar")
+                        }
+                    }
+                )
             }
 
             if (state.translationSheet !is TranslationSheetState.Hidden) {

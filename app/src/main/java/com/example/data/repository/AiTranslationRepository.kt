@@ -2,6 +2,7 @@ package com.example.data.repository
 
 import android.graphics.Bitmap
 import android.util.Log
+import com.example.BuildConfig
 import com.example.core.SupportedLanguage
 import com.example.core.activeAppCheckProviderLabel
 import com.example.data.model.DetectedBubble
@@ -326,7 +327,7 @@ class AiTranslationRepository {
                 }.getOrElse { err ->
                     "fallo proveedor: ${err.localizedMessage ?: err.javaClass.simpleName}"
                 }
-                "Error App Check (403) [Modo: $activeAppCheckProviderLabel | $tokenDiag]: $raw"
+                "Error App Check (403) [v${BuildConfig.VERSION_NAME} | $activeAppCheckProviderLabel | $tokenDiag]: $raw"
             }
             raw.contains("Unable to resolve host", ignoreCase = true) || raw.contains("timeout", ignoreCase = true) ->
                 "Sin conexión o tiempo de espera agotado al contactar el traductor."
