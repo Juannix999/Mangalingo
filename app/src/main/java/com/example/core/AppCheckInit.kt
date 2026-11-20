@@ -21,6 +21,10 @@ private const val RECAPTCHA_SITE_KEY_RES = "recaptcha_site_key"
 @Volatile
 private var appCheckConfigured = false
 
+@Volatile
+var activeAppCheckProviderLabel: String = "Sin configurar"
+    private set
+
 fun configureAppCheck(context: Context, intent: Intent?) {
     try {
         if (FirebaseApp.getApps(context).isEmpty()) {
@@ -50,6 +54,7 @@ fun configureAppCheck(context: Context, intent: Intent?) {
                 FirebaseAppCheck.getInstance().installAppCheckProviderFactory(
                     DebugAppCheckProviderFactory.getInstance()
                 )
+                activeAppCheckProviderLabel = "Debug Provider (token de entorno)"
                 appCheckConfigured = true
                 Log.d(TAG, "DebugAppCheckProviderFactory installed with harness debug token.")
                 return
@@ -59,6 +64,7 @@ fun configureAppCheck(context: Context, intent: Intent?) {
                 FirebaseAppCheck.getInstance().installAppCheckProviderFactory(
                     DebugAppCheckProviderFactory.getInstance()
                 )
+                activeAppCheckProviderLabel = "Debug Provider (persistido)"
                 appCheckConfigured = true
                 Log.d(TAG, "DebugAppCheckProviderFactory installed from persisted harness flag.")
                 return
@@ -67,6 +73,7 @@ fun configureAppCheck(context: Context, intent: Intent?) {
             // No harness debug token (e.g., APK installed directly on a physical phone):
             // Use reCAPTCHA Enterprise site key so App Check tokens are accepted by Firebase.
             if (installRecaptchaProvider(context)) {
+                activeAppCheckProviderLabel = "reCAPTCHA Enterprise"
                 appCheckConfigured = true
                 return
             }
@@ -75,13 +82,16 @@ fun configureAppCheck(context: Context, intent: Intent?) {
             FirebaseAppCheck.getInstance().installAppCheckProviderFactory(
                 DebugAppCheckProviderFactory.getInstance()
             )
+            activeAppCheckProviderLabel = "Debug Provider (sin site key)"
             appCheckConfigured = true
         } else {
             if (installRecaptchaProvider(context)) {
+                activeAppCheckProviderLabel = "reCAPTCHA Enterprise (release)"
                 appCheckConfigured = true
             }
         }
     } catch (e: Exception) {
+        activeAppCheckProviderLabel = "Error al iniciar App Check: ${e.localizedMessage}"
         Log.e(TAG, "Failed to initialize Firebase App Check", e)
     }
 }

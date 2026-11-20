@@ -3,6 +3,7 @@ package com.example.data.repository
 import android.graphics.Bitmap
 import android.util.Log
 import com.example.core.SupportedLanguage
+import com.example.core.activeAppCheckProviderLabel
 import com.example.data.model.DetectedBubble
 import com.example.data.model.TranslationAnalysis
 import com.google.firebase.Firebase
@@ -10,11 +11,14 @@ import com.google.firebase.ai.ai
 import com.google.firebase.ai.type.Schema
 import com.google.firebase.ai.type.content
 import com.google.firebase.ai.type.generationConfig
+import com.google.firebase.appcheck.FirebaseAppCheck
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 
 class AiTranslationRepository {
@@ -310,11 +314,20 @@ class AiTranslationRepository {
         return Bitmap.createScaledBitmap(softwareBitmap, newW, newH, true)
     }
 
-    private fun friendlyAiError(e: Exception): String {
+    private suspend fun friendlyAiError(e: Exception): String {
         val raw = e.localizedMessage ?: e.toString()
         return when {
-            raw.contains("403") || raw.contains("App Check", ignoreCase = true) || raw.contains("attestation", ignoreCase = true) ->
-                "Error de verificación App Check (403): $raw"
+            raw.contains("403") || raw.contains("App Check", ignoreCase = true) || raw.contains("attestation", ignoreCase = true) -> {
+                val tokenDiag = runCatching {
+                    withTimeoutOrNull(5_000L) {
+                        val token = FirebaseAppCheck.getInstance().getAppCheckToken(true).await().token
+                        if (token.count { it == '.' } == 2) "token JWT emitido" else "token inválido ($token)"
+                    } ?: "tiempo agotado obteniendo token"
+                }.getOrElse { err ->
+                    "fallo proveedor: ${err.localizedMessage ?: err.javaClass.simpleName}"
+                }
+                "Error App Check (403) [Modo: $activeAppCheckProviderLabel | $tokenDiag]: $raw"
+            }
             raw.contains("Unable to resolve host", ignoreCase = true) || raw.contains("timeout", ignoreCase = true) ->
                 "Sin conexión o tiempo de espera agotado al contactar el traductor."
             else -> raw
