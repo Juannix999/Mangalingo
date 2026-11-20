@@ -116,7 +116,7 @@ class AiTranslationRepository {
                 Return JSON only matching the schema. If no speech bubbles exist, return an empty bubbles list.
             """.trimIndent()
 
-            val response = withTimeout(30_000L) {
+            val response = withTimeout(45_000L) {
                 bubbleScanModel.generateContent(
                     content {
                         image(prepared)
@@ -161,7 +161,7 @@ class AiTranslationRepository {
             Result.success(detectedLang to bubbles)
         } catch (e: TimeoutCancellationException) {
             Log.e(TAG, "Bubble scan timed out", e)
-            Result.failure(Exception("El escaneo superó los 30s. Usa Recorte o mantén pulsado directamente sobre un globo."))
+            Result.failure(Exception("El escaneo superó los 45s. Usa Recorte o mantén pulsado directamente sobre un globo."))
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -191,7 +191,7 @@ class AiTranslationRepository {
                 - Provide reading (romaji/furigana/pronunciation) when helpful, else empty string.
             """.trimIndent()
 
-            val response = withTimeout(25_000L) {
+            val response = withTimeout(35_000L) {
                 translationModel.generateContent(prompt)
             }
             val jsonStr = response.text ?: throw IllegalStateException("El modelo devolvió una respuesta vacía.")
@@ -222,7 +222,7 @@ class AiTranslationRepository {
             )
         } catch (e: TimeoutCancellationException) {
             Log.e(TAG, "Translation timed out", e)
-            Result.failure(Exception("La traducción tardó demasiado (25s). Toca Reintentar."))
+            Result.failure(Exception("La traducción tardó demasiado (35s). Toca Reintentar."))
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -246,7 +246,7 @@ class AiTranslationRepository {
                 Provide reading, partOfSpeech, contextNote, literalBreakdown, and alternatives in $targetName.
             """.trimIndent()
 
-            val response = withTimeout(25_000L) {
+            val response = withTimeout(35_000L) {
                 cropTranslationModel.generateContent(
                     content {
                         image(prepared)
@@ -283,7 +283,7 @@ class AiTranslationRepository {
             )
         } catch (e: TimeoutCancellationException) {
             Log.e(TAG, "Crop translation timed out", e)
-            Result.failure(Exception("El análisis tardó demasiado (25s). Intenta seleccionar un área más pequeña."))
+            Result.failure(Exception("El análisis tardó demasiado (35s). Intenta seleccionar un área más pequeña."))
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
