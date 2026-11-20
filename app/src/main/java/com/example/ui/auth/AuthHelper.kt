@@ -54,7 +54,8 @@ fun attemptAutoSignIn(
     credentialManager: CredentialManager,
     onAuthSuccess: () -> Unit,
     onUnauthenticated: () -> Unit,
-    scope: CoroutineScope
+    scope: CoroutineScope,
+    onAuthError: (String) -> Unit = {}
 ) {
     if (Firebase.auth.currentUser != null) {
         onAuthSuccess()
@@ -64,21 +65,37 @@ fun attemptAutoSignIn(
         onUnauthenticated()
         return
     }
-    val clientId = try {
-        context.getString(R.string.default_web_client_id)
-    } catch (_: Exception) {
-        onUnauthenticated()
-        return
-    }
-    val googleIdOption = GetGoogleIdOption.Builder()
-        .setFilterByAuthorizedAccounts(true)
-        .setServerClientId(clientId)
-        .setAutoSelectEnabled(true)
-        .build()
-    val request = GetCredentialRequest.Builder()
-        .addCredentialOption(googleIdOption)
-        .build()
     scope.launch {
+        try {
+            val pending = Firebase.auth.pendingAuthResult
+            if (pending != null) {
+                pending.await()
+                onAuthSuccess()
+                return@launch
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "Pending web auth result failed", e)
+            onAuthError(formatAuthError(e))
+            onUnauthenticated()
+            return@launch
+        }
+
+        val clientId = try {
+            context.getString(R.string.default_web_client_id)
+        } catch (_: Exception) {
+            onUnauthenticated()
+            return@launch
+        }
+        val googleIdOption = GetGoogleIdOption.Builder()
+            .setFilterByAuthorizedAccounts(true)
+            .setServerClientId(clientId)
+            .setAutoSelectEnabled(true)
+            .build()
+        val request = GetCredentialRequest.Builder()
+            .addCredentialOption(googleIdOption)
+            .build()
         try {
             val activity = context.findActivity()
             if (activity == null) {
@@ -110,7 +127,7 @@ fun onGoogleSignInClicked(
     onAuthSuccess: () -> Unit,
     onAuthError: (String) -> Unit,
     scope: CoroutineScope,
-    onAuthCancelled: () -> Unit = {}
+    onAuthCancelled: (String?) -> Unit = {}
 ) {
     if (isDummyFirebaseConfig(context)) {
         onAuthError(DUMMY_CONFIG_ERROR)
@@ -143,7 +160,8 @@ fun onGoogleSignInClicked(
             }
         } catch (e: GetCredentialCancellationException) {
             Log.w(TAG, "Google Sign-In flow cancelled or dismissed: ${e.message}", e)
-            onAuthCancelled()
+            val detail = e.errorMessage?.toString()?.takeIf { it.isNotBlank() } ?: e.message?.takeIf { it.isNotBlank() }
+            onAuthCancelled(detail)
         } catch (e: CancellationException) {
             throw e
         } catch (e: NoCredentialException) {
@@ -185,7 +203,7 @@ private suspend fun trySecondaryGoogleIdOption(
         }
     } catch (e: GetCredentialCancellationException) {
         Log.w(TAG, "Fallback GoogleIdOption cancelled: ${e.message}", e)
-        onAuthError("No se seleccionó ninguna cuenta. Puedes ingresar tu Gmail directamente con el botón de navegador abajo.")
+        onAuthError("No se seleccionó ninguna cuenta. Puedes ingresar tu Gmail directamente con 'Ingresar Gmail por navegador' abajo.")
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
@@ -235,8 +253,23 @@ private suspend fun launchWebGoogleOAuth(
         throw e
     } catch (e: Exception) {
         Log.e(TAG, "Web Google OAuth sign-in failed", e)
-        val msg = e.localizedMessage ?: "No se pudo completar el inicio de sesión con Gmail."
-        onAuthError(msg)
+        onAuthError(formatAuthError(e))
+    }
+}
+
+private fun formatAuthError(e: Exception): String {
+    val raw = e.localizedMessage ?: e.message ?: "Error desconocido"
+    return when {
+        raw.contains("API_KEY_ANDROID_APP_BLOCKED", ignoreCase = true) ||
+            raw.contains("10:", ignoreCase = true) ||
+            raw.contains("DEVELOPER_ERROR", ignoreCase = true) ->
+            "La firma SHA-1 del APK no coincide con Firebase (asegúrate de configurar DEBUG_KEYSTORE_BASE64 en GitHub Secrets). Detalle: $raw"
+        raw.contains("access_denied", ignoreCase = true) ||
+            raw.contains("403", ignoreCase = true) ->
+            "Google bloqueó esa cuenta (si la app está en modo prueba en Google Cloud, agrega ese correo como usuario de prueba). Detalle: $raw"
+        raw.contains("network", ignoreCase = true) ->
+            "Error de red al conectar con Google/Firebase. Revisa tu internet e intenta de nuevo. ($raw)"
+        else -> "No se pudo iniciar sesión con Gmail: $raw"
     }
 }
 

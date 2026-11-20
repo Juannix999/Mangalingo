@@ -31,8 +31,8 @@ jobs:
             elif [ -n "$DEBUG_KEYSTORE_BASE64" ]; then
               printf '%s' "$DEBUG_KEYSTORE_BASE64" | tr -d '[:space:]' | base64 -d > debug.keystore
             else
-              echo "WARNING: Using a newly generated debug.keystore; native Google Sign-In SHA-1 will differ unless DEBUG_KEYSTORE_BASE64 is configured."
-              keytool -genkeypair -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+              echo "::error::Missing debug.keystore.base64 and secrets.DEBUG_KEYSTORE_BASE64. Without the matching debug keystore, Google Sign-In fails on Android due to SHA-1 mismatch. Add DEBUG_KEYSTORE_BASE64 in GitHub Settings -> Secrets and variables -> Actions."
+              exit 1
             fi
           fi
           if [ ! -f .env ] && [ -f .env.example ]; then

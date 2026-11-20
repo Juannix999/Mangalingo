@@ -82,7 +82,11 @@ fun AuthScreen(
             onUnauthenticated = {
                 isAttemptingSilent = false
             },
-            scope = scope
+            scope = scope,
+            onAuthError = { msg ->
+                isAttemptingSilent = false
+                errorMessage = msg
+            }
         )
     }
 
@@ -227,9 +231,13 @@ fun AuthScreen(
                                     errorMessage = msg
                                 },
                                 scope = scope,
-                                onAuthCancelled = {
+                                onAuthCancelled = { detail ->
                                     isLoading = false
-                                    errorMessage = "No se eligió una cuenta en el selector rápido. También puedes usar 'Ingresar Gmail por navegador' abajo."
+                                    errorMessage = if (detail != null) {
+                                        "No se completó el selector rápido ($detail). Usa 'Ingresar Gmail por navegador' abajo."
+                                    } else {
+                                        "No se eligió una cuenta en el selector rápido. También puedes usar 'Ingresar Gmail por navegador' abajo."
+                                    }
                                 }
                             )
                         },
