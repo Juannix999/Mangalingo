@@ -618,6 +618,10 @@ fun ReaderScreen(
                     sheetState = state.translationSheet,
                     onSaveClick = { viewModel.saveCurrentTranslation() },
                     onRetryClick = viewModel::retryLastTranslation,
+                    onOpenDebugToken = {
+                        copiedTokenNotice = false
+                        debugTokenDialogUuid = switchToDebugTokenProvider(context)
+                    },
                     onDismiss = viewModel::dismissTranslationSheet,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
@@ -1356,6 +1360,7 @@ private fun TranslationResultSheet(
     sheetState: TranslationSheetState,
     onSaveClick: () -> Unit,
     onRetryClick: () -> Unit,
+    onOpenDebugToken: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -1436,17 +1441,29 @@ private fun TranslationResultSheet(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(10.dp))
-                    Button(
-                        onClick = onRetryClick,
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Refresh,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Reintentar")
+                    val isAppCheckErr = sheetState.message.contains("App Check", ignoreCase = true) ||
+                        sheetState.message.contains("403")
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = onRetryClick,
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Refresh,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Reintentar")
+                        }
+                        if (isAppCheckErr) {
+                            OutlinedButton(
+                                onClick = onOpenDebugToken,
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text("Token Debug")
+                            }
+                        }
                     }
                 }
 
