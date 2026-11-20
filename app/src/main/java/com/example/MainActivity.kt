@@ -6,7 +6,12 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.core.configureAppCheck
+import com.example.data.repository.AppSettings
+import com.example.data.repository.SettingsRepository
 import com.example.ui.navigation.AppNavigation
 import com.example.ui.theme.MangaLingoTheme
 
@@ -19,7 +24,11 @@ class MainActivity : ComponentActivity() {
 
         enableEdgeToEdge()
         setContent {
-            MangaLingoTheme {
+            val settingsRepo = remember { SettingsRepository.getInstance(applicationContext) }
+            val settings by settingsRepo.settingsFlow.collectAsStateWithLifecycle(
+                initialValue = AppSettings()
+            )
+            MangaLingoTheme(darkTheme = settings.darkThemeEnabled) {
                 Surface {
                     AppNavigation()
                 }

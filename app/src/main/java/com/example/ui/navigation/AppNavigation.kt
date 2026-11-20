@@ -13,10 +13,12 @@ import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.MenuBook
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.MenuBook
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -54,6 +56,7 @@ import androidx.navigation.navArgument
 import com.example.R
 import com.example.data.repository.AiTranslationRepository
 import com.example.data.repository.MangaCatalogRepository
+import com.example.data.repository.SettingsRepository
 import com.example.data.repository.VocabularyRepository
 import com.example.ui.auth.AuthScreen
 import com.example.ui.auth.signOut
@@ -63,10 +66,12 @@ import com.example.ui.screens.LibraryScreen
 import com.example.ui.screens.MangaDetailScreen
 import com.example.ui.screens.ReaderScreen
 import com.example.ui.screens.SavedScreen
+import com.example.ui.screens.SettingsScreen
 import com.example.ui.viewmodel.ExploreViewModel
 import com.example.ui.viewmodel.MangaDetailViewModel
 import com.example.ui.viewmodel.ReaderViewModel
 import com.example.ui.viewmodel.VocabularyViewModel
+import kotlinx.coroutines.launch
 import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
@@ -81,6 +86,7 @@ object AppRoutes {
     const val ROUTE_LIBRARY = "library"
     const val ROUTE_HISTORY = "history"
     const val ROUTE_SAVED = "saved"
+    const val ROUTE_SETTINGS = "settings"
     const val ROUTE_DETAIL = "detail/{mangaId}"
     const val ROUTE_READER =
         "reader?mangaId={mangaId}&mangaTitle={mangaTitle}&coverUrl={coverUrl}&chapterId={chapterId}&chapterLabel={chapterLabel}&sourceLang={sourceLang}"
@@ -141,6 +147,13 @@ private val TopTabs = listOf(
         selectedIcon = Icons.Rounded.Bookmark,
         unselectedIcon = Icons.Outlined.BookmarkBorder,
         testTag = "tab_saved"
+    ),
+    TopLevelTab(
+        route = AppRoutes.ROUTE_SETTINGS,
+        label = "Ajustes",
+        selectedIcon = Icons.Rounded.Settings,
+        unselectedIcon = Icons.Outlined.Settings,
+        testTag = "tab_settings"
     )
 )
 
@@ -177,6 +190,7 @@ private fun AuthenticatedMangaApp(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val credentialManager = remember(context) { CredentialManager.create(context) }
+    val settingsRepository = remember(context) { SettingsRepository.getInstance(context) }
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
@@ -243,7 +257,13 @@ private fun AuthenticatedMangaApp(
                                         contentDescription = tab.label
                                     )
                                 },
-                                label = { Text(tab.label) },
+                                label = {
+                                    Text(
+                                        text = tab.label,
+                                        maxLines = 1,
+                                        softWrap = false
+                                    )
+                                },
                                 modifier = Modifier.testTag(tab.testTag)
                             )
                         }
@@ -277,7 +297,13 @@ private fun AuthenticatedMangaApp(
                                         contentDescription = tab.label
                                     )
                                 },
-                                label = { Text(tab.label) },
+                                label = {
+                                    Text(
+                                        text = tab.label,
+                                        maxLines = 1,
+                                        softWrap = false
+                                    )
+                                },
                                 modifier = Modifier.testTag(tab.testTag)
                             )
                         }
@@ -317,6 +343,18 @@ private fun AuthenticatedMangaApp(
 
                     composable(AppRoutes.ROUTE_SAVED) {
                         SavedScreen(viewModel = vocabularyViewModel)
+                    }
+
+                    composable(AppRoutes.ROUTE_SETTINGS) {
+                        SettingsScreen(
+                            settingsRepository = settingsRepository,
+                            onSignOutClick = {
+                                signOut(credentialManager, scope)
+                            },
+                            onShowMessage = { message ->
+                                scope.launch { snackbarHostState.showSnackbar(message) }
+                            }
+                        )
                     }
 
                     composable(
@@ -392,7 +430,8 @@ private fun AuthenticatedMangaApp(
                                         currentUserId = currentUserId,
                                         catalogRepository = MangaCatalogRepository(),
                                         aiRepository = AiTranslationRepository(),
-                                        vocabularyRepository = VocabularyRepository(db)
+                                        vocabularyRepository = VocabularyRepository(db),
+                                        settingsRepository = settingsRepository
                                     )
                                 }
                             }

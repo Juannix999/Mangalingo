@@ -9,7 +9,9 @@ import com.example.data.model.DetectedBubble
 import com.example.data.model.ReaderPage
 import com.example.data.model.TranslationAnalysis
 import com.example.data.repository.AiTranslationRepository
+import com.example.data.repository.AppSettings
 import com.example.data.repository.MangaCatalogRepository
+import com.example.data.repository.SettingsRepository
 import com.example.data.repository.VocabularyRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -45,7 +47,9 @@ data class ReaderUiState(
     val scannedBubblesByPage: Map<Int, List<DetectedBubble>> = emptyMap(),
     val scanningPageIndex: Int? = null,
     val scanError: String? = null,
-    val autoScanEnabled: Boolean = true,
+    val autoScanEnabled: Boolean = false,
+    val rtlReadingDirection: Boolean = false,
+    val showBubbleOutlines: Boolean = true,
     val freeLassoMode: Boolean = false,
     val activeBubble: DetectedBubble? = null,
     val selectedRange: IntRange? = null,
@@ -64,8 +68,11 @@ class ReaderViewModel(
     private val currentUserId: String,
     private val catalogRepository: MangaCatalogRepository,
     private val aiRepository: AiTranslationRepository,
-    private val vocabularyRepository: VocabularyRepository
+    private val vocabularyRepository: VocabularyRepository,
+    private val settingsRepository: SettingsRepository? = null
 ) : ViewModel() {
+
+    private var userOverrodeTargetLang = false
 
     private val _uiState = MutableStateFlow(
         ReaderUiState(
@@ -75,7 +82,7 @@ class ReaderViewModel(
             chapterId = chapterId,
             chapterLabel = chapterLabel,
             sourceLang = sourceLang,
-            targetLang = if (sourceLang == "es") SupportedLanguage.ENGLISH else SupportedLanguage.SPANISH
+            targetLang = resolveTargetLanguage(sourceLang, AppSettings().defaultTargetLang)
         )
     )
     val uiState: StateFlow<ReaderUiState> = _uiState.asStateFlow()
@@ -84,8 +91,41 @@ class ReaderViewModel(
     private var scanJob: Job? = null
 
     init {
+        observeSettings()
         loadPages()
         saveReadingProgress()
+    }
+
+    private fun observeSettings() {
+        val repo = settingsRepository ?: return
+        viewModelScope.launch {
+            repo.settingsFlow.collect { settings ->
+                _uiState.update { curr ->
+                    curr.copy(
+                        autoScanEnabled = settings.autoScanEnabled,
+                        rtlReadingDirection = settings.rtlReadingDirection,
+                        showBubbleOutlines = settings.showBubbleOutlines,
+                        targetLang = if (userOverrodeTargetLang) {
+                            curr.targetLang
+                        } else {
+                            resolveTargetLanguage(curr.sourceLang, settings.defaultTargetLang)
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    private fun resolveTargetLanguage(
+        srcLang: String,
+        preferred: SupportedLanguage
+    ): SupportedLanguage {
+        val normalized = srcLang.lowercase()
+        return if ((normalized == "es" || normalized == "es-la") && preferred == SupportedLanguage.SPANISH) {
+            SupportedLanguage.ENGLISH
+        } else {
+            preferred
+        }
     }
 
     private fun saveReadingProgress() {
@@ -160,6 +200,7 @@ class ReaderViewModel(
     }
 
     fun onTargetLanguageChanged(newLang: SupportedLanguage) {
+        userOverrodeTargetLang = true
         _uiState.update { it.copy(targetLang = newLang) }
         val currentSheet = _uiState.value.translationSheet
         if (currentSheet is TranslationSheetState.Success) {

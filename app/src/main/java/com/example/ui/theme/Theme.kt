@@ -1,6 +1,5 @@
 package com.example.ui.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
@@ -53,7 +52,9 @@ private val LightColorScheme = lightColorScheme(
     onSurface = InkText,
     surfaceVariant = PaperSurfaceVariant,
     onSurfaceVariant = InkMutedText,
-    outline = Color(0xFFDCD8CE)
+    surfaceContainerHigh = Color(0xFFE7E2D8),
+    outline = Color(0xFFDCD8CE),
+    outlineVariant = Color(0xFFE6E1D8)
 )
 
 val MangaShapes = Shapes(
@@ -65,10 +66,10 @@ val MangaShapes = Shapes(
 
 @Composable
 fun MangaLingoTheme(
-    darkTheme: Boolean = true, // Dark ink editorial theme tailored for manga reading
+    darkTheme: Boolean = true,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = if (darkTheme || isSystemInDarkTheme()) DarkColorScheme else LightColorScheme
+    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
     MaterialTheme(
         colorScheme = colorScheme,
         typography = AppTypography,

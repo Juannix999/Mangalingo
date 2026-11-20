@@ -294,18 +294,27 @@ fun ReaderScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
+                        val leftTargetPage = if (state.rtlReadingDirection) {
+                            (pagerState.currentPage + 1).coerceAtMost(state.pages.lastIndex.coerceAtLeast(0))
+                        } else {
+                            (pagerState.currentPage - 1).coerceAtLeast(0)
+                        }
+                        val leftEnabled = if (state.rtlReadingDirection) {
+                            pagerState.currentPage < state.pages.lastIndex
+                        } else {
+                            pagerState.currentPage > 0
+                        }
                         IconButton(
                             onClick = {
                                 scope.launch {
-                                    val prev = (pagerState.currentPage - 1).coerceAtLeast(0)
-                                    pagerState.animateScrollToPage(prev)
+                                    pagerState.animateScrollToPage(leftTargetPage)
                                 }
                             },
-                            enabled = pagerState.currentPage > 0
+                            enabled = leftEnabled
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
-                                contentDescription = "Página anterior"
+                                contentDescription = if (state.rtlReadingDirection) "Página siguiente" else "Página anterior"
                             )
                         }
 
@@ -386,19 +395,27 @@ fun ReaderScreen(
                             )
                         }
 
+                        val rightTargetPage = if (state.rtlReadingDirection) {
+                            (pagerState.currentPage - 1).coerceAtLeast(0)
+                        } else {
+                            (pagerState.currentPage + 1).coerceAtMost(state.pages.lastIndex.coerceAtLeast(0))
+                        }
+                        val rightEnabled = if (state.rtlReadingDirection) {
+                            pagerState.currentPage > 0
+                        } else {
+                            pagerState.currentPage < state.pages.lastIndex
+                        }
                         IconButton(
                             onClick = {
                                 scope.launch {
-                                    val next = (pagerState.currentPage + 1)
-                                        .coerceAtMost(state.pages.lastIndex.coerceAtLeast(0))
-                                    pagerState.animateScrollToPage(next)
+                                    pagerState.animateScrollToPage(rightTargetPage)
                                 }
                             },
-                            enabled = pagerState.currentPage < state.pages.lastIndex
+                            enabled = rightEnabled
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                                contentDescription = "Página siguiente"
+                                contentDescription = if (state.rtlReadingDirection) "Página anterior" else "Página siguiente"
                             )
                         }
                     }
@@ -455,6 +472,7 @@ fun ReaderScreen(
                 else -> {
                     HorizontalPager(
                         state = pagerState,
+                        reverseLayout = state.rtlReadingDirection,
                         userScrollEnabled = !state.freeLassoMode,
                         beyondViewportPageCount = 1,
                         modifier = Modifier.fillMaxSize()
@@ -482,6 +500,7 @@ fun ReaderScreen(
                                 },
                                 bubbles = bubbles,
                                 activeBubbleId = state.activeBubble?.id,
+                                showBubbleOutlines = state.showBubbleOutlines,
                                 freeLassoMode = state.freeLassoMode,
                                 isScanningThisPage = state.scanningPageIndex == pageIdx,
                                 onExitFreeLasso = viewModel::toggleFreeLassoMode,
@@ -640,6 +659,7 @@ private fun ImageMangaPageWithOverlays(
     onBitmapLoaded: (Bitmap) -> Unit,
     bubbles: List<DetectedBubble>,
     activeBubbleId: String?,
+    showBubbleOutlines: Boolean,
     freeLassoMode: Boolean,
     isScanningThisPage: Boolean,
     onExitFreeLasso: () -> Unit,
@@ -845,6 +865,16 @@ private fun ImageMangaPageWithOverlays(
                     val heightPx = ((bubble.yMax - bubble.yMin).coerceAtLeast(30) / 1000f) * fitted.height
 
                     val isActive = bubble.id == activeBubbleId
+                    val boxFillColor = when {
+                        isActive -> MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
+                        showBubbleOutlines -> MaterialTheme.colorScheme.secondary.copy(alpha = 0.14f)
+                        else -> Color.Transparent
+                    }
+                    val boxBorderColor = when {
+                        isActive -> MaterialTheme.colorScheme.primary
+                        showBubbleOutlines -> MaterialTheme.colorScheme.secondary.copy(alpha = 0.8f)
+                        else -> Color.Transparent
+                    }
                     Box(
                         modifier = Modifier
                             .align(Alignment.TopStart)
@@ -854,14 +884,10 @@ private fun ImageMangaPageWithOverlays(
                                 height = with(density) { heightPx.toDp() }
                             )
                             .clip(RoundedCornerShape(10.dp))
-                            .background(
-                                if (isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
-                                else MaterialTheme.colorScheme.secondary.copy(alpha = 0.14f)
-                            )
+                            .background(boxFillColor)
                             .border(
                                 width = if (isActive) 2.dp else 1.5.dp,
-                                color = if (isActive) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.secondary.copy(alpha = 0.8f),
+                                color = boxBorderColor,
                                 shape = RoundedCornerShape(10.dp)
                             )
                             .pointerInput(bubble) {

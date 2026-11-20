@@ -8,6 +8,7 @@
     <string name="nav_library">Biblioteca</string>
     <string name="nav_history">Historial</string>
     <string name="nav_saved">Guardadas</string>
+    <string name="nav_settings">Ajustes</string>
     <string name="search_manga_hint">Buscar mangas por título...</string>
     <string name="error_generic">Ocurrió un error inesperado. Intenta de nuevo.</string>
 </resources>
