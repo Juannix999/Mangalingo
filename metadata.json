@@ -2,5 +2,7 @@
   "name": "MangaLingo",
   "description": "Lector de manga multilingüe con traducción instantánea al mantener pulsada una palabra o seleccionar frases, historial de búsqueda y traducciones guardadas.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

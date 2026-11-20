@@ -3,6 +3,7 @@
     <string name="auth_title">Lee manga en su idioma original y traduce al instante</string>
     <string name="auth_subtitle">Mantén pulsada una palabra o selecciona dos o más para traducirlas con contexto, guardar tu historial y crear tu glosario personal.</string>
     <string name="sign_in_with_google">Continuar con Google</string>
+    <string name="sign_in_with_google_web">Ingresar Gmail por navegador</string>
     <string name="nav_explore">Explorar</string>
     <string name="nav_library">Biblioteca</string>
     <string name="nav_history">Historial</string>

@@ -2,19 +2,24 @@ package com.example.ui.auth
 
 import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
 import android.util.Log
 import androidx.credentials.ClearCredentialStateRequest
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.GetCredentialException
+import androidx.credentials.exceptions.NoCredentialException
 import com.example.R
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential.Companion.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
 import com.google.firebase.Firebase
+import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.GoogleAuthProvider
+import com.google.firebase.auth.OAuthProvider
 import com.google.firebase.auth.auth
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -22,8 +27,27 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 private const val TAG = "Auth"
+private const val DUMMY_CONFIG_ERROR =
+    "Este APK se compiló sin google-services.json real (usa 'dummy-project'). Configura el secret GOOGLE_SERVICES_JSON en GitHub Actions y vuelve a generar el APK."
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
+}
+
+private fun isDummyFirebaseConfig(context: Context): Boolean {
+    val clientId = runCatching { context.getString(R.string.default_web_client_id) }.getOrDefault("")
+    val options = runCatching { FirebaseApp.getInstance().options }.getOrNull()
+    val projectId = options?.projectId.orEmpty()
+    val apiKey = options?.apiKey.orEmpty()
+    return clientId.contains("dummy", ignoreCase = true) ||
+        projectId.equals("dummy-project", ignoreCase = true) ||
+        apiKey.contains("Dummy", ignoreCase = true)
+}
 
 fun attemptAutoSignIn(
     context: Context,
@@ -34,6 +58,10 @@ fun attemptAutoSignIn(
 ) {
     if (Firebase.auth.currentUser != null) {
         onAuthSuccess()
+        return
+    }
+    if (isDummyFirebaseConfig(context)) {
+        onUnauthenticated()
         return
     }
     val clientId = try {
@@ -52,12 +80,15 @@ fun attemptAutoSignIn(
         .build()
     scope.launch {
         try {
-            val activity = context as? Activity
+            val activity = context.findActivity()
             if (activity == null) {
                 onUnauthenticated()
                 return@launch
             }
-            val cred = credentialManager.getCredential(activity, request).credential
+            val result = withTimeoutOrNull(4_000L) {
+                credentialManager.getCredential(activity, request)
+            }
+            val cred = result?.credential
             if (cred is CustomCredential && cred.type == TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
                 val token = GoogleIdTokenCredential.createFrom(cred.data).idToken
                 Firebase.auth.signInWithCredential(GoogleAuthProvider.getCredential(token, null)).await()
@@ -81,10 +112,14 @@ fun onGoogleSignInClicked(
     scope: CoroutineScope,
     onAuthCancelled: () -> Unit = {}
 ) {
+    if (isDummyFirebaseConfig(context)) {
+        onAuthError(DUMMY_CONFIG_ERROR)
+        return
+    }
     val clientId = try {
         context.getString(R.string.default_web_client_id)
     } catch (_: Exception) {
-        onAuthError("Falta la configuración de Google Sign-In (default_web_client_id).")
+        onAuthError("Falta la configuración de Google Sign-In. Prueba el acceso web con Gmail abajo.")
         return
     }
     val signInOption = GetSignInWithGoogleOption.Builder(serverClientId = clientId).build()
@@ -92,26 +127,116 @@ fun onGoogleSignInClicked(
         .addCredentialOption(signInOption)
         .build()
     scope.launch {
+        val activity = context.findActivity()
+        if (activity == null) {
+            onAuthError("No se encontró la pantalla activa para iniciar sesión.")
+            return@launch
+        }
         try {
-            val activity = context as? Activity
-                ?: throw IllegalStateException("Contexto de Activity no disponible.")
             val cred = credentialManager.getCredential(activity, request).credential
             if (cred is CustomCredential && cred.type == TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
                 val token = GoogleIdTokenCredential.createFrom(cred.data).idToken
                 Firebase.auth.signInWithCredential(GoogleAuthProvider.getCredential(token, null)).await()
                 onAuthSuccess()
             } else {
-                onAuthError("Tipo de credencial inesperado.")
+                launchWebGoogleOAuth(activity, onAuthSuccess, onAuthError)
             }
         } catch (e: GetCredentialCancellationException) {
             Log.w(TAG, "Google Sign-In flow cancelled or dismissed: ${e.message}", e)
             onAuthCancelled()
         } catch (e: CancellationException) {
             throw e
+        } catch (e: NoCredentialException) {
+            Log.w(TAG, "NoCredentialException on GetSignInWithGoogleOption, trying GetGoogleIdOption", e)
+            trySecondaryGoogleIdOption(activity, credentialManager, clientId, onAuthSuccess, onAuthError)
+        } catch (e: GetCredentialException) {
+            Log.e(TAG, "Credential Manager Google Sign-In failed: ${e.type} - ${e.message}", e)
+            trySecondaryGoogleIdOption(activity, credentialManager, clientId, onAuthSuccess, onAuthError)
         } catch (e: Exception) {
             Log.e(TAG, "Google Sign-In failed", e)
-            onAuthError(e.localizedMessage ?: "No se pudo iniciar sesión con Google.")
+            launchWebGoogleOAuth(activity, onAuthSuccess, onAuthError)
         }
+    }
+}
+
+private suspend fun trySecondaryGoogleIdOption(
+    activity: Activity,
+    credentialManager: CredentialManager,
+    clientId: String,
+    onAuthSuccess: () -> Unit,
+    onAuthError: (String) -> Unit
+) {
+    try {
+        val fallbackOption = GetGoogleIdOption.Builder()
+            .setFilterByAuthorizedAccounts(false)
+            .setServerClientId(clientId)
+            .setAutoSelectEnabled(false)
+            .build()
+        val request = GetCredentialRequest.Builder()
+            .addCredentialOption(fallbackOption)
+            .build()
+        val cred = credentialManager.getCredential(activity, request).credential
+        if (cred is CustomCredential && cred.type == TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
+            val token = GoogleIdTokenCredential.createFrom(cred.data).idToken
+            Firebase.auth.signInWithCredential(GoogleAuthProvider.getCredential(token, null)).await()
+            onAuthSuccess()
+        } else {
+            launchWebGoogleOAuth(activity, onAuthSuccess, onAuthError)
+        }
+    } catch (e: GetCredentialCancellationException) {
+        Log.w(TAG, "Fallback GoogleIdOption cancelled: ${e.message}", e)
+        onAuthError("No se seleccionó ninguna cuenta. Puedes ingresar tu Gmail directamente con el botón de navegador abajo.")
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Log.w(TAG, "Fallback GoogleIdOption failed (${e.message}), falling back to web OAuth")
+        launchWebGoogleOAuth(activity, onAuthSuccess, onAuthError)
+    }
+}
+
+fun onGoogleWebSignInClicked(
+    context: Context,
+    onAuthSuccess: () -> Unit,
+    onAuthError: (String) -> Unit,
+    scope: CoroutineScope
+) {
+    if (isDummyFirebaseConfig(context)) {
+        onAuthError(DUMMY_CONFIG_ERROR)
+        return
+    }
+    scope.launch {
+        val activity = context.findActivity()
+        if (activity == null) {
+            onAuthError("No se encontró la pantalla activa para iniciar sesión.")
+            return@launch
+        }
+        launchWebGoogleOAuth(activity, onAuthSuccess, onAuthError)
+    }
+}
+
+private suspend fun launchWebGoogleOAuth(
+    activity: Activity,
+    onAuthSuccess: () -> Unit,
+    onAuthError: (String) -> Unit
+) {
+    try {
+        val pending = Firebase.auth.pendingAuthResult
+        if (pending != null) {
+            pending.await()
+            onAuthSuccess()
+            return
+        }
+        val provider = OAuthProvider.newBuilder("google.com")
+            .addCustomParameter("prompt", "select_account")
+            .build()
+        Firebase.auth.startActivityForSignInWithProvider(activity, provider).await()
+        onAuthSuccess()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Log.e(TAG, "Web Google OAuth sign-in failed", e)
+        val msg = e.localizedMessage ?: "No se pudo completar el inicio de sesión con Gmail."
+        onAuthError(msg)
     }
 }
 
